@@ -109,8 +109,32 @@ async def dashboard():
         </html>
     """
 
+import requests
+from fastapi import BackgroundTasks
+
+# ... (boshqa importlar qoladi)
+
+# Tashqi tizimga yuborish uchun URL (Render Environment Variable orqali sozlanadi)
+FORWARD_URL = os.getenv("FORWARD_URL")
+
+# ... (boshqa kodlar qoladi)
+
+def forward_alert_task(data: dict, image_path: str = None):
+    if not FORWARD_URL: return
+    
+    try:
+        files = {}
+        if image_path and os.path.exists(image_path):
+            files = {'file': open(image_path, 'rb')}
+            
+        requests.post(FORWARD_URL, data=data, files=files, timeout=10)
+        print(f"⏩ Xabar tashqi tizimga yuborildi: {FORWARD_URL}")
+    except Exception as e:
+        print(f"⚠️ Forwarding xatolik: {e}")
+
 @app.post("/api/alert")
 async def receive_alert(
+    background_tasks: BackgroundTasks,
     status: str = Form(...), 
     message: str = Form(...),
     file: UploadFile = File(None)
@@ -119,14 +143,15 @@ async def receive_alert(
     
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     image_url = None
+    saved_file_path = None
 
     # Agar rasm yuborilgan bo'lsa, saqlaymiz
     if file:
         file_ext = file.filename.split(".")[-1]
         filename = f"alert_{int(datetime.datetime.now().timestamp())}.{file_ext}"
-        file_path = f"static/images/{filename}"
+        saved_file_path = f"static/images/{filename}"
         
-        with open(file_path, "wb") as buffer:
+        with open(saved_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
         # URL (Masalan: /static/images/alert_123456.jpg)
@@ -144,6 +169,12 @@ async def receive_alert(
 
     # 2. Arxivga (history.json) qo'shish
     archive_to_json(new_event)
+    
+    # 3. Tashqi tizimga yuborish (Fon rejimida - mijozni kutdirmaslik uchun)
+    if FORWARD_URL:
+        # Faylni o'qish uchun qayta ochish kerak bo'ladi, shuning uchun path beramiz
+        forward_data = {"status": status, "message": message, "time": timestamp}
+        background_tasks.add_task(forward_alert_task, forward_data, saved_file_path)
 
     return {"res": "ok", "image_url": image_url}
 
