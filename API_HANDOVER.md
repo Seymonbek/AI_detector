@@ -17,8 +17,6 @@ API qanday ishlashini ko'rish va test qilish uchun:
 ### 1. Xavf haqida xabar berish (POST)
 Detektor yoki boshqa qurilma xavfni aniqlasa, shu yerga so'rov yuboradi.
 
-**DIQQAT:** Bu endpoint endi **`multipart/form-data`** qabul qiladi (Rasm yuborish uchun).
-
 **URL:** `/api/alert`
 **Method:** `POST`
 **Body (Form Data):**
@@ -43,3 +41,20 @@ So'nggi hodisalar tarixini olish uchun.
   ...
 ]
 ```
+
+### 3. Serverni tozalash (POST)
+Seans tarixini o'chirish uchun (Detektor ishga tushganda avtomatik chaqiradi).
+
+**URL:** `/api/reset`
+**Method:** `POST`
+
+---
+
+## 🔄 API Forwarding (Webhook)
+Agar siz ushbu ma'lumotlarni **boshqa tizimga (Mijozning API siga)** ham avtomatik yubormoqchi bo'lsangiz:
+
+Render sozlamalarida (`Environment Variables`) quyidagi o'zgaruvchini qo'shing:
+*   **Key:** `FORWARD_URL`
+*   **Value:** `https://mijoz-api.com/receive-alert`
+
+Shunda server har bir xabarni o'sha manzilga ham "Forward" qiladi.
