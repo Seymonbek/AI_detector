@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import datetime
 import json
 import os
+import shutil
 import uvicorn
 
 app = FastAPI(
@@ -22,15 +24,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rasmlarni saqlash uchun papka
+os.makedirs("static/images", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Fayl nomi (Arxiv uchun - o'chib ketmaydi)
 DB_FILE = "history.json"
 
 # Seans tarixi - HAR SAFAR O'CHIRIB YOQQANDA BO'SH BO'LADI []
 session_history = []
-
-class Alert(BaseModel):
-    status: str
-    message: str
 
 def archive_to_json(new_event):
     data = []
@@ -56,11 +58,15 @@ async def dashboard():
             <title>AI Monitoring - Pure Session</title>
             <style>
                 body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
-                .event-card { background: white; padding: 12px; margin-bottom: 10px; border-left: 5px solid #28a745; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-                h1 { color: #333; }
-                .session-info { color: #d9534f; font-weight: bold; margin-bottom: 20px; }
-                .time { color: #888; font-size: 12px; }
-                .api-link { display: inline-block; margin-top: 20px; padding: 10px 15px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+                .event-card { background: white; padding: 15px; margin-bottom: 15px; border-left: 5px solid #28a745; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+                .event-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+                .time { color: #888; font-size: 14px; }
+                .message { font-size: 16px; font-weight: bold; color: #333; }
+                .event-image { max-width: 100%; border-radius: 5px; margin-top: 10px; border: 1px solid #ddd; }
+                h1 { color: #333; text-align: center; }
+                .session-info { text-align: center; color: #d9534f; font-weight: bold; margin-bottom: 20px; }
+                .api-link { display: block; text-align: center; margin-top: 20px; color: #007bff; text-decoration: none; }
+                #status-list { max-width: 600px; margin: 0 auto; }
             </style>
             <script>
                 function updateDashboard() {
@@ -70,39 +76,67 @@ async def dashboard():
                     .then(data => {
                         let listHtml = "";
                         if(data.length === 0) {
-                            listHtml = "<p>Hozircha ushbu seansda yangi xabarlar yo'q...</p>";
+                            listHtml = "<p style='text-align:center'>Hozircha ushbu seansda yangi xabarlar yo'q...</p>";
                         } else {
                             // Yangilari tepada chiqishi uchun reverse qilamiz
                             [...data].reverse().forEach(event => {
+                                let imageHtml = "";
+                                if (event.image_url) {
+                                    imageHtml = `<img src="${event.image_url}" class="event-image" alt="Detection Image">`;
+                                }
+                                
                                 listHtml += `<div class="event-card">
-                                                <span class="time">${event.time}</span><br>
-                                                <strong>${event.message}</strong>
+                                                <div class="event-header">
+                                                    <span class="time">${event.time}</span>
+                                                </div>
+                                                <div class="message">${event.message}</div>
+                                                ${imageHtml}
                                              </div>`;
                             });
                         }
                         document.getElementById('status-list').innerHTML = listHtml;
                     });
                 }
-                setInterval(updateDashboard, 1000);
+                setInterval(updateDashboard, 2000); // Har 2 soniyada yangilash
             </script>
         </head>
         <body>
-            <h1>Live Session Monitoring</h1>
+            <h1>Live AI Monitoring</h1>
             <p class="session-info">DIQQAT: Server qayta yoqildi. Faqat yangi ma'lumotlar ko'rsatiladi.</p>
+            <div id="status-list">Yuklanmoqda...</div>
             <a href="/docs" class="api-link" target="_blank">API Hujjatlari (Swagger UI)</a>
-            <div id="status-list" style="margin-top: 20px;">Yuklanmoqda...</div>
         </body>
         </html>
     """
 
 @app.post("/api/alert")
-async def receive_alert(alert: Alert):
+async def receive_alert(
+    status: str = Form(...), 
+    message: str = Form(...),
+    file: UploadFile = File(None)
+):
     global session_history
     
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    image_url = None
+
+    # Agar rasm yuborilgan bo'lsa, saqlaymiz
+    if file:
+        file_ext = file.filename.split(".")[-1]
+        filename = f"alert_{int(datetime.datetime.now().timestamp())}.{file_ext}"
+        file_path = f"static/images/{filename}"
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # URL (Masalan: /static/images/alert_123456.jpg)
+        image_url = f"/static/images/{filename}"
+
     new_event = {
-        "status": alert.status,
-        "message": alert.message,
-        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "status": status,
+        "message": message,
+        "time": timestamp,
+        "image_url": image_url
     }
 
     # 1. Seansga qo'shish
@@ -111,7 +145,7 @@ async def receive_alert(alert: Alert):
     # 2. Arxivga (history.json) qo'shish
     archive_to_json(new_event)
 
-    return {"res": "ok"}
+    return {"res": "ok", "image_url": image_url}
 
 @app.get("/api/status")
 async def get_status():
@@ -120,7 +154,7 @@ async def get_status():
 if __name__ == "__main__":
     # Server yonganini terminalda ko'rish uchun
     print("\n" + "=" * 30)
-    print("YANGI SEANS BOSHLANDI!")
+    print("YANGI SEANS BOSHLANDI (RASMLAR BILAN)!")
     print("API docs: http://localhost:5000/docs")
     print("=" * 30 + "\n")
 

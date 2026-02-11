@@ -1,6 +1,7 @@
 import cv2
 from ultralytics import YOLO
 import requests
+import time
 
 # 1. Modelni yuklash
 model = YOLO('yolov8n.pt')
@@ -10,7 +11,12 @@ cap = cv2.VideoCapture("test_video.mp4")
 
 # AGAR SERVERGA YUKLASANGIZ, BU YERGA SERVER IP MANZILINI YOZING!
 # Masalan: "http://192.168.1.100:5000/api/alert" yoki "https://mening-saytim.com/api/alert"
-SERVER_URL = "http://127.0.0.1:5000/api/alert"
+# AGAR SERVERGA YUKLASANGIZ, BU YERGA SERVER IP MANZILINI YOZING!
+SERVER_URL = "https://ai-detector-e2x2.onrender.com/api/alert"
+
+# Xabar yuborish chastotasini cheklash (Cooldown)
+# Har bir ID uchun alohida vaqt saqlaymiz: {obj_id: timestamp}
+last_alert_times = {}
 
 # Odamlarning oldingi kordinatalarini saqlash uchun (oddiyroq usul)
 # Kalit sifatida odamning tartib raqami yoki koordinatasi ishlatiladi
@@ -25,8 +31,6 @@ while cap.isOpened():
 
     # persist=True trackingni yoqadi
     results = model.track(frame, persist=True, verbose=False, conf=0.5)
-
-    danger_now = False
 
     # Agar kadrda ob'ektlar aniqlangan bo'lsa
     if results[0].boxes is not None and results[0].boxes.id is not None:
@@ -43,8 +47,39 @@ while cap.isOpened():
 
                 # YO'NALISH: O'NGDAN -> CHAPGA (LINE_X dan o'tish)
                 if old_x >= LINE_X and current_x < LINE_X:
-                    danger_now = True
                     print(f"DIQQAT: ID {obj_id} o'ngdan chapga o'tdi!")
+                    
+                    # Cooldown tekshirish (Shu ID uchun)
+                    current_time = time.time()
+                    last_time = last_alert_times.get(obj_id, 0)
+                    
+                    if current_time - last_time > 120:
+                        print(f"XAVF ANIQLANDI! Serverga yuborilmoqda: {SERVER_URL}")
+                        
+                        # Rasmni tayyorlash (siqish)
+                        _, img_encoded = cv2.imencode('.jpg', frame)
+                        img_bytes = img_encoded.tobytes()
+                        
+                        try:
+                            # Multipart/form-data yuborish (Rasm + Matn)
+                            files = {'file': ('alert.jpg', img_bytes, 'image/jpeg')}
+                            data = {
+                                "status": "danger",
+                                "message": f"DIQQAT: Ob'ekt {obj_id} taqiqlangan yo'nalishda (o'ngdan chapga) o'tdi!"
+                            }
+                            
+                            response = requests.post(SERVER_URL, data=data, files=files, timeout=120) 
+                            
+                            if response.status_code == 200:
+                                print(f"✅ Muvaffaqiyatli yuborildi (Rasm bilan)! Javob: {response.text}")
+                                last_alert_times[obj_id] = current_time # Vaqtni yangilaymiz
+                            else:
+                                print(f"❌ Xatolik! Server kodi: {response.status_code}. Javob: {response.text}")
+                                
+                        except Exception as e:
+                            print(f"❌ Ulanishda xatolik: {e}")
+                    else:
+                        print(f"⚠️ ID {obj_id} uchun cooldown (kutish) rejimi.")
 
             # Pozitsiyani yangilash
             prev_positions[obj_id] = current_x
@@ -54,15 +89,6 @@ while cap.isOpened():
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
             cv2.putText(frame, f"ID:{obj_id}", (int(x1), int(y1)-10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-    # Serverga faqat xavf bo'lganda yuborish
-    if danger_now:
-        try:
-            requests.post(SERVER_URL, json={
-                "status": "danger",
-                "message": "DIQQAT: Odam taqiqlangan yo'nalishda (o'ngdan chapga) o'tdi!"
-            }, timeout=0.1)
-        except: pass
 
     # Chiziqni chizish
     cv2.line(frame, (LINE_X, 0), (LINE_X, height), (255, 255, 0), 2)
