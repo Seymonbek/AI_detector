@@ -2,11 +2,11 @@ import cv2
 from ultralytics import YOLO
 import requests
 import time
+import threading
 
 # 1. Modelni yuklash
 model = YOLO('yolov8n.pt')
 
-# 2. Videoni yuklash
 # 2. Videoni yuklash
 cap = cv2.VideoCapture("test_video.mp4")
 
@@ -28,6 +28,16 @@ last_alert_times = {}
 # Odamlarning oldingi kordinatalarini saqlash uchun (oddiyroq usul)
 # Kalit sifatida odamning tartib raqami yoki koordinatasi ishlatiladi
 prev_positions = {}
+
+def send_alert_thread(url, data, files, obj_id):
+    try:
+        response = requests.post(url, data=data, files=files, timeout=30)
+        if response.status_code == 200:
+            print(f"✅ ID {obj_id} yuborildi! Javob: {response.text}")
+        else:
+            print(f"❌ ID {obj_id} xatolik: {response.status_code}")
+    except Exception as e:
+        print(f"❌ ID {obj_id} ulanish xatosi: {e}")
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -70,30 +80,23 @@ while cap.isOpened():
                     last_time = last_alert_times.get(obj_id, 0)
                     
                     if current_time - last_time > 120:
-                        print(f"XAVF ANIQLANDI! Serverga yuborilmoqda: {SERVER_URL}")
+                        print(f"XAVF ANIQLANDI! Fon rejimida yuborilmoqda...")
                         
                         # Rasmni tayyorlash (siqish)
                         _, img_encoded = cv2.imencode('.jpg', frame)
                         img_bytes = img_encoded.tobytes()
                         
-                        try:
-                            # Multipart/form-data yuborish (Rasm + Matn)
-                            files = {'file': ('alert.jpg', img_bytes, 'image/jpeg')}
-                            data = {
-                                "status": "danger",
-                                "message": f"DIQQAT: Ob'ekt {obj_id} taqiqlangan yo'nalishda (o'ngdan chapga) o'tdi!"
-                            }
-                            
-                            response = requests.post(SERVER_URL, data=data, files=files, timeout=120) 
-                            
-                            if response.status_code == 200:
-                                print(f"✅ Muvaffaqiyatli yuborildi (Rasm bilan)! Javob: {response.text}")
-                                last_alert_times[obj_id] = current_time # Vaqtni yangilaymiz
-                            else:
-                                print(f"❌ Xatolik! Server kodi: {response.status_code}. Javob: {response.text}")
-                                
-                        except Exception as e:
-                            print(f"❌ Ulanishda xatolik: {e}")
+                        # Ma'lumotlar
+                        files = {'file': ('alert.jpg', img_bytes, 'image/jpeg')}
+                        data = {
+                            "status": "danger",
+                            "message": f"DIQQAT: Ob'ekt {obj_id} taqiqlangan yo'nalishda (o'ngdan chapga) o'tdi!"
+                        }
+                        
+                        # Alohida oqimda (Thread) yuborish - Dastur qotib qolmaydi
+                        threading.Thread(target=send_alert_thread, args=(SERVER_URL, data, files, obj_id)).start()
+                        
+                        last_alert_times[obj_id] = current_time # Vaqtni yangilaymiz
                     else:
                         print(f"⚠️ ID {obj_id} uchun cooldown (kutish) rejimi.")
 

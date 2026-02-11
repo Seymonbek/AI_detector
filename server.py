@@ -154,8 +154,10 @@ async def receive_alert(
         with open(saved_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # URL (Masalan: /static/images/alert_123456.jpg)
-        image_url = f"/static/images/{filename}"
+        # URL (Masalan: https://ai-detector-e2x2.onrender.com/static/images/alert_123456.jpg)
+        # Eslatma: Renderda domen o'zgarsa, shuni o'zgartirish kerak
+        BASE_URL = "https://ai-detector-e2x2.onrender.com"
+        image_url = f"{BASE_URL}/static/images/{filename}"
 
     new_event = {
         "status": status,
@@ -173,7 +175,12 @@ async def receive_alert(
     # 3. Tashqi tizimga yuborish (Fon rejimida - mijozni kutdirmaslik uchun)
     if FORWARD_URL:
         # Faylni o'qish uchun qayta ochish kerak bo'ladi, shuning uchun path beramiz
-        forward_data = {"status": status, "message": message, "time": timestamp}
+        forward_data = {
+            "status": status, 
+            "message": message, 
+            "time": timestamp,
+            "image_url": image_url # <-- Endi to'liq URL ham boradi
+        }
         background_tasks.add_task(forward_alert_task, forward_data, saved_file_path)
 
     return {"res": "ok", "image_url": image_url}
