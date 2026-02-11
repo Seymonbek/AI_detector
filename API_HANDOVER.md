@@ -36,7 +36,7 @@ So'nggi hodisalar tarixini olish uchun.
     "status": "danger",
     "message": "DIQQAT: ...",
     "time": "2024-02-10 15:30:00",
-    "image_url": "/static/images/alert_170756.jpg" (agar rasm bo'lsa)
+    "image_url": "https://ai-detector-e2x2.onrender.com/static/images/alert_170756.jpg" (To'liq URL)
   },
   ...
 ]
@@ -51,10 +51,15 @@ Seans tarixini o'chirish uchun (Detektor ishga tushganda avtomatik chaqiradi).
 ---
 
 ## 🔄 API Forwarding (Webhook)
-Agar siz ushbu ma'lumotlarni **boshqa tizimga (Mijozning API siga)** ham avtomatik yubormoqchi bo'lsangiz:
+Agar siz `FORWARD_URL` sozlagan bo'lsangiz, server quyidagi ma'lumotlarni o'sha manzilga yuboradi:
 
-Render sozlamalarida (`Environment Variables`) quyidagi o'zgaruvchini qo'shing:
-*   **Key:** `FORWARD_URL`
-*   **Value:** `https://mijoz-api.com/receive-alert`
-
-Shunda server har bir xabarni o'sha manzilga ham "Forward" qiladi.
+**POST Body:**
+```json
+{
+  "status": "danger",
+  "message": "DIQQAT: ...",
+  "time": "2024-02-11 14:00:00",
+  "image_url": "https://ai-detector-e2x2.onrender.com/static/images/alert_123456.jpg"
+}
+```
+**File:** Rasm fayli (`file` parametri ostida) ham qo'shib yuboriladi.
