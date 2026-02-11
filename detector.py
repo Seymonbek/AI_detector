@@ -7,12 +7,19 @@ import time
 model = YOLO('yolov8n.pt')
 
 # 2. Videoni yuklash
+# 2. Videoni yuklash
 cap = cv2.VideoCapture("test_video.mp4")
 
 # AGAR SERVERGA YUKLASANGIZ, BU YERGA SERVER IP MANZILINI YOZING!
-# Masalan: "http://192.168.1.100:5000/api/alert" yoki "https://mening-saytim.com/api/alert"
-# AGAR SERVERGA YUKLASANGIZ, BU YERGA SERVER IP MANZILINI YOZING!
 SERVER_URL = "https://ai-detector-e2x2.onrender.com/api/alert"
+
+# Dastur boshlanishida server tarixini tozalash (Reset)
+try:
+    print("Server tarixi tozalanmoqda...")
+    requests.post(SERVER_URL.replace("/alert", "/reset"), timeout=5)
+    print("✅ Server tozalandi!")
+except Exception as e:
+    print(f"⚠️ Serverni tozalashda xatolik: {e}")
 
 # Xabar yuborish chastotasini cheklash (Cooldown)
 # Har bir ID uchun alohida vaqt saqlaymiz: {obj_id: timestamp}
@@ -28,6 +35,9 @@ while cap.isOpened():
 
     height, width, _ = frame.shape
     LINE_X = width // 2
+
+    # Chiziqni chizish (Avval chizamiz, shunda rasmda ko'rinadi)
+    cv2.line(frame, (LINE_X, 0), (LINE_X, height), (255, 255, 0), 2)
 
     # persist=True trackingni yoqadi
     results = model.track(frame, persist=True, verbose=False, conf=0.5)
@@ -48,6 +58,12 @@ while cap.isOpened():
                 # YO'NALISH: O'NGDAN -> CHAPGA (LINE_X dan o'tish)
                 if old_x >= LINE_X and current_x < LINE_X:
                     print(f"DIQQAT: ID {obj_id} o'ngdan chapga o'tdi!")
+                    
+                    # FAQAT shu odamni chizamiz (xavf bo'lganda)
+                    color = (0, 0, 255) # Qizil
+                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                    cv2.putText(frame, f"ID:{obj_id}", (int(x1), int(y1)-10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                     
                     # Cooldown tekshirish (Shu ID uchun)
                     current_time = time.time()
@@ -84,14 +100,6 @@ while cap.isOpened():
             # Pozitsiyani yangilash
             prev_positions[obj_id] = current_x
 
-            # Vizualizatsiya
-            color = (0, 0, 255) if current_x < LINE_X else (0, 255, 0)
-            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-            cv2.putText(frame, f"ID:{obj_id}", (int(x1), int(y1)-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-    # Chiziqni chizish
-    cv2.line(frame, (LINE_X, 0), (LINE_X, height), (255, 255, 0), 2)
     cv2.imshow("Direction Detection", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'): break

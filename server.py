@@ -147,6 +147,13 @@ async def receive_alert(
 
     return {"res": "ok", "image_url": image_url}
 
+@app.post("/api/reset")
+async def reset_session():
+    global session_history
+    session_history = []
+    print("Seans tarixi tozalandi!")
+    return {"res": "ok", "message": "Session history cleared"}
+
 @app.get("/api/status")
 async def get_status():
     return session_history
