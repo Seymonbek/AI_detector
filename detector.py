@@ -3,15 +3,17 @@ from ultralytics import YOLO
 import requests
 import time
 import threading
+import os
 
 # 1. Modelni yuklash
 model = YOLO('yolov8n.pt')
 
 # 2. Videoni yuklash
-cap = cv2.VideoCapture("test_video.mp4")
+VIDEO_SOURCE = os.getenv("VIDEO_SOURCE", "test_video.mp4")
+cap = cv2.VideoCapture(VIDEO_SOURCE)
 
-# AGAR SERVERGA YUKLASANGIZ, BU YERGA SERVER IP MANZILINI YOZING!
-SERVER_URL = "https://ai-detector-e2x2.onrender.com/api/alert"
+# Lokal demo uchun standart manzil
+SERVER_URL = os.getenv("SERVER_URL", "http://127.0.0.1:5000/api/alert")
 
 # Dastur boshlanishida server tarixini tozalash (Reset)
 try:
@@ -94,7 +96,11 @@ while cap.isOpened():
                         }
                         
                         # Alohida oqimda (Thread) yuborish - Dastur qotib qolmaydi
-                        threading.Thread(target=send_alert_thread, args=(SERVER_URL, data, files, obj_id)).start()
+                        threading.Thread(
+                            target=send_alert_thread,
+                            args=(SERVER_URL, data, files, obj_id),
+                            daemon=True
+                        ).start()
                         
                         last_alert_times[obj_id] = current_time # Vaqtni yangilaymiz
                     else:

@@ -97,6 +97,7 @@ async def dashboard():
                         document.getElementById('status-list').innerHTML = listHtml;
                     });
                 }
+                window.addEventListener('load', updateDashboard);
                 setInterval(updateDashboard, 2000); // Har 2 soniyada yangilash
             </script>
         </head>
@@ -134,6 +135,7 @@ def forward_alert_task(data: dict, image_path: str = None):
 
 @app.post("/api/alert")
 async def receive_alert(
+    request: Request,
     background_tasks: BackgroundTasks,
     status: str = Form(...), 
     message: str = Form(...),
@@ -154,9 +156,8 @@ async def receive_alert(
         with open(saved_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # URL (Masalan: https://ai-detector-e2x2.onrender.com/static/images/alert_123456.jpg)
-        # Eslatma: Renderda domen o'zgarsa, shuni o'zgartirish kerak
-        BASE_URL = "https://ai-detector-e2x2.onrender.com"
+        # Joriy server manzilidan foydalanamiz, shunda lokal va deploy holatida bir xil ishlaydi.
+        BASE_URL = str(request.base_url).rstrip("/")
         image_url = f"{BASE_URL}/static/images/{filename}"
 
     new_event = {
